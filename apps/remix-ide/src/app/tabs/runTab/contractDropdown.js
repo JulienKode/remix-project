@@ -21,6 +21,7 @@ class ContractDropdownUI {
     this.ipfsCheckedState = false
     this.exEnvironment = blockchain.getProvider()
     this.listenToContextChange()
+    this.loadType = 'other'
   }
 
   listenToEvents () {
@@ -29,13 +30,13 @@ class ContractDropdownUI {
       var contractNames = document.querySelector(`.${css.contractNames.classNames[0]}`)
       contractNames.innerHTML = ''
       if (success) {
-        this.selectContractNames.removeAttribute('disabled')
+        this.enableContractNames(true)
         this.atAddress.removeAttribute('disabled')
         this.dropdownLogic.getCompiledContracts(compiler, compilerFullName).forEach((contract) => {
           contractNames.appendChild(yo`<option value="${contract.name}" compiler="${compilerFullName}">${contract.name} - ${contract.file}</option>`)
         })
       } else {
-        this.selectContractNames.setAttribute('disabled', true)
+        this.enableContractNames(false, 'sol')
         this.atAddress.setAttribute('disabled', true)
       }
       this.setInputParamsPlaceHolder()
@@ -82,14 +83,41 @@ class ContractDropdownUI {
     window.localStorage.setItem(`ipfs/${this.exEnvironment}/${this.networkName}`, this.ipfsCheckedState)
   }
 
+  enableContractNames (enable) {
+    if (enable) {
+      this.selectContractNames.removeAttribute('disabled')
+      this.selectContractNames.setAttribute('title', 'Select compiled *.sol file to deploy or access contracts.')
+    } else {
+      this.selectContractNames.setAttribute('disabled', true)
+      if (this.loadType === 'sol') {
+        this.selectContractNames.setAttribute('title', 'Select and compile *.sol file to deploy or access a contract.')
+      } else {
+        this.selectContractNames.setAttribute('title', 'Selected *.abi file allows accessing contracts, select and compile *.sol file to deploy and access one.')
+      }
+    }
+  }
+
+  enableAtAddress (enable) {
+    if (enable) {
+      this.atAddress.removeAttribute('disabled')
+      this.atAddress.setAttribute('title', 'Select compiled *.sol file or select *.abi file to access a contract.')
+    } else {
+      this.atAddress.setAttribute('disabled', true)
+      if (this.atAddressButtonInput.value === '') {
+        this.atAddress.setAttribute('title', 'Compile *.sol file or select *.abi file and enter the address of contract to interact.')
+      } else {
+        this.atAddress.setAttribute('title', 'Compile *.sol file or select *.abi file.')
+      }
+    }
+  }
+
   render () {
     this.compFails = yo`<i title="No contract compiled yet or compilation failed. Please check the compile tab for more information." class="m-2 ml-3 fas fa-times-circle ${css.errorIcon}" ></i>`
-    var info = yo`<i class="fas fa-info ${css.infoDeployAction}" aria-hidden="true" title="*.sol files allows deploying and accessing contracts. *.abi files only allows accessing contracts."></i>`
-    this.atAddress = yo`<button class="${css.atAddress} btn btn-sm btn-info" disabled id="runAndDeployAtAdressButton" onclick=${this.loadFromAddress.bind(this)}>At Address</button>`
+    this.atAddress = yo`<button class="${css.atAddress} btn btn-sm btn-info" id="runAndDeployAtAdressButton" onclick=${this.loadFromAddress.bind(this)}>At Address</button>`
     this.atAddressButtonInput = yo`<input class="${css.input} ${css.ataddressinput} ataddressinput form-control" placeholder="Load contract from Address" title="address of contract" oninput=${this.atAddressChanged.bind(this)} />`
-    this.selectContractNames = yo`<select class="${css.contractNames} custom-select" disabled></select>`
-
+    this.selectContractNames = yo`<select class="${css.contractNames} custom-select" disabled title="Please compile *.sol file to deploy or access a contract"></select>`
     if (this.exEnvironment === 'vm') this.networkName = 'VM'
+    this.enableAtAddress(false)
 
     const savedConfig = window.localStorage.getItem(`ipfs/${this.exEnvironment}/${this.networkName}`)
     this.ipfsCheckedState = savedConfig === 'true' ? true : false // eslint-disable-line
@@ -125,7 +153,7 @@ class ContractDropdownUI {
       <div class="${css.container}" data-id="contractDropdownContainer">
         <label class="${css.settingsLabel}">Contract</label>
         <div class="${css.subcontainer}">
-          ${this.selectContractNames} ${this.compFails} ${info}
+          ${this.selectContractNames} ${this.compFails}
         </div>
         <div>
           ${this.createPanel}
@@ -147,27 +175,32 @@ class ContractDropdownUI {
 
   atAddressChanged (event) {
     if (!this.atAddressButtonInput.value) {
-      this.atAddress.setAttribute('disabled', 'true')
+      this.enableAtAddress(false)
     } else {
-      if (this.selectContractNames && !this.selectContractNames.getAttribute('disabled')) {
-        this.atAddress.removeAttribute('disabled')
+      if ((this.selectContractNames && !this.selectContractNames.getAttribute('disabled') && this.loadType === 'sol') ||
+        this.loadType === 'abi') {
+        this.enableAtAddress(true)
+      } else {
+        this.enableAtAddress(false)
       }
     }
   }
 
   changeCurrentFile (currentFile) {
     if (!document.querySelector(`.${css.contractNames}`)) return
-    var contractNames = document.querySelector(`.${css.contractNames.classNames[0]}`)
     if (/.(.abi)$/.exec(currentFile)) {
       this.createPanel.style.display = 'none'
       this.orLabel.style.display = 'none'
       this.compFails.style.display = 'none'
-      contractNames.appendChild(yo`<option>(abi)</option>`)
-      this.selectContractNames.setAttribute('disabled', true)
-      this.atAddress.setAttribute('disabled', true)
+      this.loadType = 'abi'
+      this.enableContractNames(false)
     } else if (/.(.sol)$/.exec(currentFile)) {
       this.createPanel.style.display = 'block'
       this.orLabel.style.display = 'block'
+      this.loadType = 'sol'
+    } else {
+      this.loadType = 'other'
+      this.enableContractNames(false)
     }
   }
 
